@@ -4,68 +4,29 @@ Guia completo para colocar a Fuel Consumption API no ar usando o
 plano gratuito do PythonAnywhere. Para deploy em outros provedores
 (Railway, Render, Fly.io, etc.) basta usar `uvicorn` direto.
 
-## ⚠️ Antes de tudo: estrutura do repositório
+## Estrutura esperada do repositório
 
-O back-end neste repo está em `src/` mas os imports esperam o pacote
-`app.fuel.*` (veja `src/routes.py` → `from app.fuel.schemas import ...`).
-Para a app rodar, o código precisa estar nessa estrutura:
+O projeto já vem organizado assim (a `app/` é o pacote Python; o
+`src/` antigo foi removido neste commit):
 
 ```
 Fuel-Consumption-API/
-├── app/                  ← o pacote Python
+├── app/                  ← pacote Python importável
 │   ├── __init__.py
-│   ├── main.py           ← FastAPI app
-│   ├── config.py         ← Settings
+│   ├── main.py           ← FastAPI app + middleware + handlers
+│   ├── config.py         ← Pydantic Settings
 │   ├── errors.py         ← erros tipados
-│   ├── middleware/
-│   ├── shared/
-│   └── fuel/
-│       ├── __init__.py
-│       ├── routes.py     ← era src/routes.py
-│       ├── service.py    ← era src/service.py
-│       ├── schemas.py    ← era src/schemas.py
-│       ├── physics.py    ← era src/physics.py
-│       ├── corrections.py
-│       ├── repository.py
-│       └── presets.py
+│   ├── middleware/       ← request_id, logging
+│   ├── shared/           ← logger JSON
+│   └── fuel/             ← rotas, schemas, service, physics, etc.
+├── tests/                ← suíte pytest (219 testes, ~96% cobertura)
+├── frontend/             ← interface web estática
 ├── requirements.txt
-├── wsgi.py
-└── frontend/
+├── wsgi.py               ← entry point WSGI pro PythonAnywhere free
+├── .env.example
+├── deploy.md             ← este arquivo
+└── README.md
 ```
-
-**Se você ainda não fez essa reestruturação**, siga o roteiro da
-seção [0. Reestruturar o repositório](#0-reestruturar-o-repositório)
-mais abaixo antes de continuar.
-
----
-
-## 0. Reestruturar o repositório
-
-Esse é o caminho mais limpo. Se preferir, pode pular essa etapa
-caso seu repo já tenha a estrutura `app/fuel/...` — passe direto
-para [1. Preparar o projeto](#1-preparar-o-projeto).
-
-```bash
-# local, na raiz do repo
-mkdir -p app/fuel
-touch app/__init__.py app/fuel/__init__.py
-
-mv src/corrections.py app/fuel/corrections.py
-mv src/physics.py     app/fuel/physics.py
-mv src/presets.py     app/fuel/presets.py
-mv src/repository.py  app/fuel/repository.py
-mv src/routes.py      app/fuel/routes.py
-mv src/schemas.py     app/fuel/schemas.py
-mv src/service.py     app/fuel/service.py
-
-rmdir src
-```
-
-Crie também `app/main.py`, `app/config.py`, `app/errors.py` e a pasta
-`app/middleware/` (veja a versão de referência em
-<https://github.com/seu-repo/Fuel-Consumption-API/blob/main/app/>).
-
-Depois faça `git add -A && git commit -m "Restructure: src/ → app/fuel/"`.
 
 ---
 
@@ -76,12 +37,11 @@ Depois faça `git add -A && git commit -m "Restructure: src/ → app/fuel/"`.
 3. Confirme o e-mail
 
 **Limitações do plano free:**
-
 - 1 web app por conta
 - CPU limitado a ~100 s/dia
 - 512 MB de RAM
 - Domínio `seuusuario.pythonanywhere.com` (domínio próprio só no plano pago)
-- Sem ASGI nativo (por isso precisamos do `a2wsgi`)
+- Sem ASGI nativo (por isso usamos `a2wsgi` para embrulhar em WSGI)
 
 ---
 
@@ -113,9 +73,7 @@ pip install -r requirements.txt
 > **Erros comuns**:
 > - "externally-managed-environment" → você esqueceu de ativar o `.venv`
 > - Falha ao compilar `pydantic-core` → tente `pip install pydantic==2.9.2 --only-binary=:all:`
-> - Python 3.11 não disponível → no PythonAnywhere free, as versões
->   disponíveis são 3.10 e 3.11. Use exatamente a mesma versão que
->   rodou localmente.
+> - Python 3.11 não disponível → no PythonAnywhere free, as versões disponíveis são 3.10 e 3.11. Use exatamente a mesma versão que rodou localmente.
 
 ---
 
@@ -206,6 +164,21 @@ pip install -r requirements.txt
 
 ---
 
+## Rodando os testes no PythonAnywhere (opcional)
+
+Você pode rodar a suíte pytest direto no console bash pra garantir
+que tudo continua passando depois de uma atualização:
+
+```bash
+cd ~/Fuel-Consumption-API
+source .venv/bin/activate
+pytest -q
+```
+
+Esperado: **219 passed** com cobertura ~96%.
+
+---
+
 ## Se você tiver o plano Hacker (pago)
 
 Tem suporte ASGI nativo. Nesse caso:
@@ -213,9 +186,6 @@ Tem suporte ASGI nativo. Nesse caso:
 1. **Web** → **Add a new web app** → **Asynchronous (ASGI)**
 2. Crie `asgi.py` na raiz:
    ```python
-   import sys
-   from pathlib import Path
-   sys.path.insert(0, str(Path(__file__).parent / "app"))
    from app.main import app
    application = app
    ```
@@ -229,17 +199,19 @@ Tem suporte ASGI nativo. Nesse caso:
 | Sintoma                                              | Causa provável                                          | Solução                                                       |
 |------------------------------------------------------|---------------------------------------------------------|---------------------------------------------------------------|
 | 500 logo de cara                                     | `application` não foi encontrado                        | Confira o path do **WSGI configuration file**                 |
-| `ModuleNotFoundError: app`                           | `sys.path` não inclui o pacote                          | Confira o `wsgi.py` (ele faz `sys.path.insert(0, "src")` ou `"app"`) |
-| `ModuleNotFoundError: No module named 'app.fuel'`    | Repo ainda com layout antigo (`src/` em vez de `app/`)  | Siga a seção 0 (Reestruturar)                                 |
+| `ModuleNotFoundError: app`                           | `sys.path` não inclui a raiz                            | Confirme o `wsgi.py` (ele faz `sys.path.insert(0, BASE_DIR)`) |
+| `ModuleNotFoundError: No module named 'app.fuel'`    | Repo ainda com layout antigo (`src/`)                   | Faça `git pull` (o repo já está reestruturado)               |
+| `ModuleNotFoundError: No module named 'app.main'`    | `wsgi.py` ou `app/main.py` faltando                     | Verifique se `git clone` baixou tudo                          |
 | 500 só nas rotas `/api/...`                          | `a2wsgi` não instalado                                 | `pip install a2wsgi` no venv                                  |
-| CORS error no browser                                | CORS não está liberado                                  | `cors_origins=["*"]` no `app/config.py`                       |
+| CORS error no browser                                | CORS não está liberado                                  | `cors_origins=["*"]` no `.env` ou `app/config.py`             |
 | Web app não atualiza                                 | Worker antigo em memória                                | Clique em **Reload** (não só Save) na aba Web                 |
 | `H14 No such file or directory`                      | **Working directory** errado                            | Coloque o mesmo path do **Source code**                       |
 | Funciona local mas não no PA                         | Versão de Python diferente                              | Use exatamente a mesma versão (3.11) em ambos                |
-| `DisallowedHost` no log                              | Host header do PythonAnywhere não bate                  | Middleware TrustHost do FastAPI resolve, ou ajuste `cors_origins` |
+| `DisallowedHost` no log                              | Host header do PythonAnywhere não bate                  | Ajuste `cors_origins` no `.env` ou desabilite a validação    |
+| `BadRequest` no batch                                | Lista maior que `BATCH_SIZE_LIMIT` (default 100)        | Reduza a lista ou aumente o limite via `.env`                 |
 
 ---
 
-Dica final: mantenha o `Error log` aberto numa aba enquanto
+Dica final: mantenha o **Error log** aberto numa aba enquanto
 testa — ele atualiza em tempo real e mostra exatamente onde
 a app travou na inicialização.

@@ -37,7 +37,7 @@ como fatores multiplicativos.
 ### 1. Setup
 
 ```bash
-cd fuel-consumption-api
+# você está na raiz do repositório
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt

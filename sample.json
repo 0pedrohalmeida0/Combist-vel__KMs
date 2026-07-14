@@ -1,0 +1,44 @@
+{
+  "vehicle": {
+    "type": "car",
+    "preset_id": "car-compact-popular",
+    "category": "hatch",
+    "empty_weight_kg": 1100.0,
+    "engine_displacement_l": 1.0,
+    "engine_power_kw": 75.0,
+    "transmission": "manual",
+    "cylinders": 3,
+    "drag_coefficient_cd": 0.33,
+    "frontal_area_m2": 2.10,
+    "rolling_resistance_coeff": 0.010,
+    "tire_pressure_kpa": 220.0,
+    "fuel_tank_capacity_l": 44.0,
+    "fuel_type": "gasoline",
+    "year": 2024
+  },
+  "trip": {
+    "distance_km": 100.0,
+    "average_speed_kmh": 80.0,
+    "speed_profile": "constant"
+  },
+  "environment": {
+    "temperature_c": 20.0,
+    "altitude_m": 0.0,
+    "humidity_pct": 60.0,
+    "wind_speed_kmh": 0.0,
+    "wind_direction_deg": 0.0,
+    "road_condition": "dry"
+  },
+  "load": {
+    "passenger_count": 1,
+    "passenger_avg_weight_kg": 75.0,
+    "cargo_weight_kg": 0.0,
+    "towing_kg": 0.0
+  },
+  "driver": {
+    "driving_style": "normal",
+    "use_ac": false,
+    "fuel_quality": "regular",
+    "fuel_price_brl_per_l": 6.0
+  }
+}
