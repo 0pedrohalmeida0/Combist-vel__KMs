@@ -60,6 +60,12 @@ python -m pytest -q
 
 83 testes cobrindo física, correções, serviço de cálculo e rotas HTTP.
 
+### 4. Deploy
+
+Pra colocar no ar (PythonAnywhere, Railway, Render, etc.),
+veja [deploy.md](deploy.md) — passo a passo com adaptador WSGI,
+armadilhas comuns e troubleshooting de logs.
+
 ---
 
 ## Variáveis de ambiente
