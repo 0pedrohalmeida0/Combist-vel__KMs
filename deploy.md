@@ -67,7 +67,7 @@ cd ~/Fuel-Consumption-API
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r backend-requirements.txt
 ```
 
 > **Erros comuns**:
@@ -155,7 +155,7 @@ git push
 # no Bash do PythonAnywhere:
 cd ~/Fuel-Consumption-API
 git pull
-# se requirements.txt mudou:
+# se backend-requirements.txt mudou:
 source .venv/bin/activate
 pip install -r requirements.txt
 
