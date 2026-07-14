@@ -1,0 +1,11 @@
+# Netlify redirects — alternative ao bloco [[redirects]] do netlify.toml.
+#
+# === Proxy reverso pra API PythonAnywhere ===
+# Descomente o bloco abaixo e troque "seuusuario" pelo seu username do
+# PythonAnywhere. Aí o frontend pode usar URL relativa "/api/..." e
+# CORS vira problema de servidor, não de cliente.
+
+# /api/*  https://seuusuario.pythonanywhere.com/api/:splat  200
+
+# === SPA fallback (mantém o index.html caso a rota não exista) ===
+/*    /index.html   200

@@ -9,7 +9,11 @@
   // Config
   // -----------------------------------------------------------------------
   const LS_KEY = 'fuel_api_base';
-  const DEFAULT_API = 'http://localhost:8000';
+  // DEFAULT_API pode ser:
+  //   '' (vazio)       — usa URL relativa; requer o proxy /api/* no Netlify
+  //   URL absoluta     — aponta direto pro back-end (sem proxy)
+  // Se você descomentou o bloco [[redirects]] em netlify.toml, deixa ''.
+  const DEFAULT_API = 'https://seuusuario.pythonanywhere.com';
 
   // -----------------------------------------------------------------------
   // DOM helpers
