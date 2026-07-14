@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fuel Consumption API — Calculadora</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">⛽</span>
+        <div>
+          <h1>Fuel Consumption</h1>
+          <p class="brand-sub">Calculadora de consumo para veículos leves</p>
+        </div>
+      </div>
+      <div class="api-bar">
+        <label for="api-base" class="api-label">API</label>
+        <input id="api-base" type="url" spellcheck="false" placeholder="http://localhost:8000" />
+        <span id="api-status" class="api-status" data-state="unknown" title="Saúde da API">●</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ============================ FORM ============================ -->
+    <section class="card form-card" aria-label="Parâmetros da viagem">
+      <form id="calc-form" novalidate>
+        <!-- Veículo -->
+        <fieldset class="group">
+          <legend>Veículo</legend>
+
+          <div class="row two">
+            <label>
+              <span>Tipo</span>
+              <select name="vehicle.type" id="vehicle-type" required>
+                <option value="car">Carro</option>
+                <option value="motorcycle">Moto</option>
+              </select>
+            </label>
+
+            <label>
+              <span>Preset</span>
+              <select name="vehicle.preset_id" id="vehicle-preset">
+                <option value="">— veículo custom —</option>
+              </select>
+            </label>
+          </div>
+
+          <details class="advanced">
+            <summary>Especificações customizadas</summary>
+            <p class="hint">Preencha apenas se não usar preset. Cada campo sobrescreve o preset escolhido.</p>
+
+            <div class="row three">
+              <label><span>Peso vazio (kg)</span><input type="number" name="vehicle.empty_weight_kg" step="0.1" min="1" /></label>
+              <label><span>Potência (kW)</span><input type="number" name="vehicle.engine_power_kw" step="0.1" min="0.1" /></label>
+              <label><span>Cilindrada (L)</span><input type="number" name="vehicle.engine_displacement_l" step="0.01" min="0.05" /></label>
+            </div>
+
+            <div class="row three">
+              <label><span>Cd (arrasto)</span><input type="number" name="vehicle.drag_coefficient_cd" step="0.01" min="0.15" max="0.6" /></label>
+              <label><span>Área frontal (m²)</span><input type="number" name="vehicle.frontal_area_m2" step="0.01" min="0.3" max="4" /></label>
+              <label><span>Crr (rolamento)</span><input type="number" name="vehicle.rolling_resistance_coeff" step="0.001" min="0.005" max="0.025" /></label>
+            </div>
+
+            <div class="row three">
+              <label><span>Pressão pneus (kPa)</span><input type="number" name="vehicle.tire_pressure_kpa" step="1" min="120" max="350" /></label>
+              <label><span>Tanque (L)</span><input type="number" name="vehicle.fuel_tank_capacity_l" step="0.1" min="0.1" /></label>
+              <label><span>Ano</span><input type="number" name="vehicle.year" step="1" min="1950" max="2030" /></label>
+            </div>
+
+            <div class="row three">
+              <label>
+                <span>Combustível</span>
+                <select name="vehicle.fuel_type">
+                  <option value="">—</option>
+                  <option value="gasoline">Gasolina</option>
+                  <option value="ethanol">Etanol</option>
+                  <option value="diesel">Diesel</option>
+                  <option value="flex">Flex</option>
+                </select>
+              </label>
+              <label>
+                <span>Câmbio</span>
+                <select name="vehicle.transmission">
+                  <option value="">—</option>
+                  <option value="manual">Manual</option>
+                  <option value="automatic">Automático</option>
+                  <option value="cvt">CVT</option>
+                </select>
+              </label>
+              <label><span>Cilindros</span><input type="number" name="vehicle.cylinders" step="1" min="1" max="16" /></label>
+            </div>
+          </details>
+        </fieldset>
+
+        <!-- Viagem -->
+        <fieldset class="group">
+          <legend>Viagem</legend>
+
+          <div class="row two">
+            <label><span>Distância (km) *</span><input type="number" name="trip.distance_km" step="0.1" min="0.1" required /></label>
+            <label><span>Velocidade média (km/h)</span><input type="number" name="trip.average_speed_kmh" step="1" min="5" max="250" value="80" /></label>
+          </div>
+
+          <div class="row three">
+            <label>
+              <span>Perfil</span>
+              <select name="trip.speed_profile">
+                <option value="constant">Constante</option>
+                <option value="highway">Rodovia</option>
+                <option value="mixed" selected>Misto</option>
+                <option value="suburban">Suburbano</option>
+                <option value="urban">Urbano</option>
+              </select>
+            </label>
+            <label><span>Paradas/km</span><input type="number" name="trip.stops_per_km" step="0.01" min="0" placeholder="auto" /></label>
+            <label><span>Tempo ocioso (min)</span><input type="number" name="trip.idle_time_min" step="1" min="0" value="0" /></label>
+          </div>
+
+          <details class="advanced">
+            <summary>Perfil de elevação</summary>
+            <p class="hint">Opcional. Liste pontos (km, m) em ordem crescente. Sem preenchimento, considera plano.</p>
+            <div id="elev-points" class="elev-points"></div>
+            <div class="row two">
+              <button type="button" class="btn ghost" id="add-elev">+ Adicionar ponto</button>
+              <button type="button" class="btn ghost danger" id="clear-elev">Limpar</button>
+            </div>
+          </details>
+        </fieldset>
+
+        <!-- Ambiente -->
+        <fieldset class="group">
+          <legend>Ambiente</legend>
+          <div class="row three">
+            <label><span>Temperatura (°C)</span><input type="number" name="environment.temperature_c" step="0.5" min="-30" max="50" value="20" /></label>
+            <label><span>Altitude (m)</span><input type="number" name="environment.altitude_m" step="10" min="-100" max="5000" value="0" /></label>
+            <label><span>Umidade (%)</span><input type="number" name="environment.humidity_pct" step="1" min="0" max="100" value="60" /></label>
+          </div>
+          <div class="row three">
+            <label><span>Vento (km/h)</span><input type="number" name="environment.wind_speed_kmh" step="1" min="0" max="150" value="0" /></label>
+            <label>
+              <span>Direção do vento</span>
+              <select name="environment.wind_direction_deg">
+                <option value="0" selected>De frente (0°)</option>
+                <option value="45">Quase de frente (45°)</option>
+                <option value="90">Lateral (90°)</option>
+                <option value="135">Lateral-traseiro (135°)</option>
+                <option value="180">De trás (180°)</option>
+                <option value="225">Traseiro-lateral (225°)</option>
+                <option value="270">Lateral (270°)</option>
+                <option value="315">Lateral-frente (315°)</option>
+              </select>
+            </label>
+            <label>
+              <span>Piso</span>
+              <select name="environment.road_condition">
+                <option value="dry" selected>Seco</option>
+                <option value="wet">Molhado</option>
+                <option value="snow">Neve</option>
+                <option value="ice">Gelo</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Carga -->
+        <fieldset class="group">
+          <legend>Carga</legend>
+          <div class="row three">
+            <label><span>Passageiros</span><input type="number" name="load.passenger_count" step="1" min="0" max="9" value="1" /></label>
+            <label><span>Peso médio (kg)</span><input type="number" name="load.passenger_avg_weight_kg" step="1" min="1" value="75" /></label>
+            <label><span>Carga (kg)</span><input type="number" name="load.cargo_weight_kg" step="1" min="0" value="0" /></label>
+          </div>
+          <div class="row three">
+            <label><span>Reboque (kg)</span><input type="number" name="load.towing_kg" step="1" min="0" value="0" /></label>
+          </div>
+        </fieldset>
+
+        <!-- Condutor / auxiliares -->
+        <fieldset class="group">
+          <legend>Condutor e auxiliares</legend>
+          <div class="row three">
+            <label>
+              <span>Estilo</span>
+              <select name="driver.driving_style">
+                <option value="eco">Econômico</option>
+                <option value="normal" selected>Normal</option>
+                <option value="aggressive">Agressivo</option>
+              </select>
+            </label>
+            <label class="check">
+              <input type="checkbox" name="driver.use_ac" />
+              <span>Ar-condicionado</span>
+            </label>
+            <label>
+              <span>Qualidade do combustível</span>
+              <select name="driver.fuel_quality">
+                <option value="regular" selected>Comum</option>
+                <option value="premium">Premium</option>
+              </select>
+            </label>
+          </div>
+          <div class="row three">
+            <label><span>Preço (R$/L)</span><input type="number" name="driver.fuel_price_brl_per_l" step="0.01" min="0" placeholder="opcional" /></label>
+          </div>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit" class="btn primary" id="submit-btn">Calcular</button>
+          <button type="button" class="btn ghost" id="reset-btn">Limpar</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ============================ RESULT ============================ -->
+    <section class="card result-card" aria-label="Resultados">
+      <div id="result-empty" class="empty-state">
+        <span class="empty-icon" aria-hidden="true">📊</span>
+        <h2>Pronto pra calcular</h2>
+        <p>Preencha os parâmetros e clique em <strong>Calcular</strong> pra ver o consumo estimado.</p>
+      </div>
+
+      <div id="result-content" class="hidden">
+        <div class="result-header">
+          <h2 id="vehicle-label">—</h2>
+          <span id="fuel-type-badge" class="badge">—</span>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric primary">
+            <span class="metric-label">Combustível total</span>
+            <span class="metric-value" id="m-fuel">—</span>
+            <span class="metric-sub" id="m-fuel-cost">—</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Consumo médio</span>
+            <span class="metric-value" id="m-km-l">—</span>
+            <span class="metric-sub" id="m-l-100km">—</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Duração</span>
+            <span class="metric-value" id="m-duration">—</span>
+            <span class="metric-sub" id="m-distance">—</span>
+          </div>
+          <div class="metric">
+            <span class="metric-label">Energia</span>
+            <span class="metric-value" id="m-energy">—</span>
+            <span class="metric-sub" id="m-co2">—</span>
+          </div>
+        </div>
+
+        <div class="chart-block">
+          <h3>Contribuição dos fatores</h3>
+          <p class="hint">Cada barra mostra o multiplicador aplicado ao combustível base. 1.0 = neutro, &gt;1.0 = aumenta consumo, &lt;1.0 = reduz.</p>
+          <div class="chart-wrap">
+            <canvas id="factors-chart" height="260"></canvas>
+          </div>
+        </div>
+
+        <div class="extras">
+          <div class="extra">
+            <h3>Massa total</h3>
+            <p id="m-mass">—</p>
+          </div>
+          <div class="extra">
+            <h3>Densidade do ar</h3>
+            <p id="m-air">—</p>
+          </div>
+          <div class="extra">
+            <h3>Vento de proa efetivo</h3>
+            <p id="m-headwind">—</p>
+          </div>
+          <div class="extra">
+            <h3>Carga auxiliar</h3>
+            <p id="m-aux">—</p>
+          </div>
+        </div>
+
+        <div id="warnings-block" class="warnings hidden">
+          <h3>Avisos</h3>
+          <ul id="warnings-list"></ul>
+        </div>
+
+        <details class="advanced">
+          <summary>Breakdown por segmento (100 m)</summary>
+          <div class="table-wrap">
+            <table id="segments-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Início (km)</th>
+                  <th>Fim (km)</th>
+                  <th>Inclin.</th>
+                  <th>Vel. (km/h)</th>
+                  <th>P (W)</th>
+                  <th>Combust. (L)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+
+      <div id="result-error" class="error-state hidden">
+        <span class="empty-icon" aria-hidden="true">⚠️</span>
+        <h2>Não foi possível calcular</h2>
+        <pre id="error-detail"></pre>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>Fuel Consumption API</span>
+    <span class="sep">·</span>
+    <a href="https://github.com/0pedrohalmeida0/Fuel-Consumption-API" target="_blank" rel="noopener">ver no GitHub</a>
+  </footer>
+</body>
+</html>

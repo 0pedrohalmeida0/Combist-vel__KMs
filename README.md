@@ -8,6 +8,8 @@ combustível, idade do veículo e tipo de transmissão.
 
 > **Stack**: Python 3.11 · FastAPI · Pydantic v2 · Uvicorn · pytest + httpx
 
+Acompanha uma **interface web estática** em [`frontend/`](frontend/) — HTML + CSS + JavaScript vanilla, sem build step, pronta pra servir com qualquer servidor estático. Veja [`frontend/README.md`](frontend/README.md).
+
 ---
 
 ## Visão geral
