@@ -104,6 +104,32 @@
     // 'input' em selects).
     form.addEventListener('input', saveFormCache);
     form.addEventListener('change', saveFormCache);
+
+    // Shadow state do distance: cada vez que o user digita, guardamos
+    // uma cópia em uma variável JS. Se o DOM for resetado (e está sendo,
+    // por motivo desconhecido), a gente ainda tem o valor.
+    if (distanceInput) {
+      distanceInput.addEventListener('input', () => {
+        distanceShadow = distanceInput.value;
+        console.log('[fuel] shadow atualizado:', distanceShadow);
+      });
+      // Inicializa o shadow com o que tiver no DOM (ou no cache).
+      distanceShadow = distanceInput.value || (loadFormCache()['trip.distance_km'] || '');
+
+      // MutationObserver: detecta qualquer alteração no value do campo
+      // que NÃO veio de um evento 'input' (ex: reset, autofill, extensão,
+      // BFCache). Loga pra debug.
+      const observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          if (m.attributeName === 'value' || m.type === 'attributes') {
+            console.warn('[fuel] distância mudou sem input event:', {
+              old: m.oldValue, new: distanceInput.value, shadow: distanceShadow,
+            });
+          }
+        }
+      });
+      observer.observe(distanceInput, { attributes: true, attributeFilter: ['value'] });
+    }
   }
 
   async function loadEngine() {
@@ -179,6 +205,13 @@
   // -----------------------------------------------------------------------
   // Form parsing
   // -----------------------------------------------------------------------
+
+  // Shadow state — o valor da distância é rastreado em paralelo ao DOM
+  // porque o input continua misteriosamente "sendo limpo" no clique do
+  // botão Calcular (provavelmente por algum plugin de browser, autofill
+  // agressivo, ou bug do navegador). O shadow é a fonte da verdade.
+  let distanceShadow = '';
+
   function parseForm() {
     const fd = new FormData(form);
     const obj = {};
@@ -187,6 +220,15 @@
     }
     if (!('driver.use_ac' in obj)) {
       setDeep(obj, 'driver.use_ac', false);
+    }
+
+    // Garante que a distância SEMPRE esteja no payload, usando o shadow
+    // se o FormData vier vazio. Se ambos vazios, deixa null mesmo.
+    const fdDistance = obj.trip && obj.trip.distance_km;
+    if (!fdDistance && distanceShadow && parseFloat(distanceShadow) > 0) {
+      if (!obj.trip) obj.trip = {};
+      obj.trip.distance_km = parseFloat(distanceShadow);
+      console.log('[fuel] distância recuperada do shadow state:', distanceShadow);
     }
     return obj;
   }
@@ -300,6 +342,18 @@
     resultContent.classList.add('hidden');
     resultEmpty.classList.add('hidden');
 
+    // === Captura early do distance (shadow) ===
+    // Tira um snapshot do input ANTES de qualquer outra coisa. Se o
+    // FormData vier vazio, ainda temos o shadow.
+    const earlyDistance = distanceInput ? distanceInput.value : '';
+    if (earlyDistance && parseFloat(earlyDistance) > 0) {
+      distanceShadow = earlyDistance;
+    }
+    console.log('[fuel] submit start', {
+      domValue: earlyDistance,
+      shadow: distanceShadow,
+    });
+
     let payload;
     try {
       const parsed = parseForm();
@@ -313,20 +367,34 @@
       return;
     }
 
+    console.log('[fuel] payload após parse:', {
+      tripDistance: payload.trip && payload.trip.distance_km,
+      vehicleType: payload.vehicle && payload.vehicle.type,
+    });
+
+    // === Recuperação em camadas ===
     if (!payload.trip || !payload.trip.distance_km) {
-      // Tenta recuperar a distância do cache local antes de desistir.
-      const recovered = recoverDistance();
-      if (recovered) {
-        // Re-parseia o form com o campo agora preenchido.
-        const reparsed = cleanNulls(parseForm());
-        if (reparsed.trip && reparsed.trip.distance_km) {
-          payload = reparsed;
-          // Mostra um aviso suave em vez de erro — o usuário vai ver que
-          // pegamos do cache mas o cálculo segue.
-          showSoftWarning(recovered);
+      // 1) Tenta o shadow state (variável JS)
+      if (distanceShadow && parseFloat(distanceShadow) > 0) {
+        if (!payload.trip) payload.trip = {};
+        payload.trip.distance_km = parseFloat(distanceShadow);
+        if (distanceInput && !distanceInput.value) distanceInput.value = distanceShadow;
+        showSoftWarning(`Distância restaurada do estado em memória (${distanceShadow} km).`);
+        console.log('[fuel] recuperado do shadow:', distanceShadow);
+      } else {
+        // 2) Tenta o localStorage
+        const recovered = recoverDistance();
+        if (recovered) {
+          const reparsed = cleanNulls(parseForm());
+          if (reparsed.trip && reparsed.trip.distance_km) {
+            payload = reparsed;
+            showSoftWarning(recovered);
+            console.log('[fuel] recuperado do cache:', recovered);
+          }
         }
       }
     }
+
     if (!payload.trip || !payload.trip.distance_km) {
       showError('Informe a distância da viagem (campo obrigatório).');
       submitBtn.disabled = false;
@@ -357,6 +425,7 @@
 
   function onReset() {
     form.reset();
+    distanceShadow = '';
     form.elements['trip.average_speed_kmh'].value = 80;
     form.elements['environment.temperature_c'].value = 20;
     form.elements['environment.altitude_m'].value = 0;

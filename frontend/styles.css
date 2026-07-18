@@ -364,6 +364,18 @@ input:invalid:not(:placeholder-shown) { border-color: var(--danger); }
 
 .hidden { display: none !important; }
 
+/* Tarja de aviso não-fatal (ex: valor recuperado do cache). */
+.soft-warning {
+  background: var(--primary-soft);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+
 .result-header {
   display: flex;
   align-items: center;
