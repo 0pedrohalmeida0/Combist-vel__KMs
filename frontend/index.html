@@ -37,7 +37,7 @@
           <div class="row two">
             <label>
               <span>Tipo</span>
-              <select name="vehicle.type" id="vehicle-type" required>
+              <select name="vehicle.type" id="vehicle-type">
                 <option value="car">Carro</option>
                 <option value="motorcycle">Moto</option>
               </select>
@@ -103,7 +103,7 @@
           <legend>Viagem</legend>
 
           <div class="row two">
-            <label><span>Distância (km) *</span><input type="number" name="trip.distance_km" step="0.1" min="0.1" required /></label>
+            <label><span>Distância (km) *</span><input type="number" name="trip.distance_km" step="0.1" min="0.1" inputmode="decimal" /></label>
             <label><span>Velocidade média (km/h)</span><input type="number" name="trip.average_speed_kmh" step="1" min="5" max="250" value="80" /></label>
           </div>
 

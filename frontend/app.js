@@ -21,6 +21,7 @@
   const elevContainer = $('#elev-points');
   const addElevBtn = $('#add-elev');
   const clearElevBtn = $('#clear-elev');
+  const distanceInput = form.querySelector('[name="trip.distance_km"]');
 
   const resultEmpty = $('#result-empty');
   const resultContent = $('#result-content');
@@ -28,6 +29,9 @@
 
   let factorsChart = null;
   let elevCounter = 0;
+
+  // localStorage key para o cache do form (principalmente a distância).
+  const FORM_CACHE_KEY = 'fuel:form-cache:v1';
 
   // Engine é carregado dinamicamente (ES module) — resolvido em
   // `engineReady` antes do usuário poder submeter.
@@ -89,6 +93,17 @@
     } catch (err) {
       showError(`Erro ao carregar o motor de cálculo: ${err.message}`);
     }
+
+    // Restaura valores do cache local (de uma sessão anterior ou de antes
+    // de algum reset do DOM). Não sobrescreve o que o usuário já digitou
+    // nesta sessão.
+    restoreFormCache();
+
+    // Salva o cache a cada input/change. Usando 'input' cobre text/number,
+    // 'change' cobre select/checkbox (a maioria dos browsers não dispara
+    // 'input' em selects).
+    form.addEventListener('input', saveFormCache);
+    form.addEventListener('change', saveFormCache);
   }
 
   async function loadEngine() {
@@ -176,6 +191,69 @@
     return obj;
   }
 
+  // -----------------------------------------------------------------------
+  // Cache do form (localStorage). Salvamos em dois momentos:
+  //   1) em cada 'input'/'change' do form  →  permite restauração se algo
+  //      resetar o DOM depois (bug raro mas que aconteceu);
+  //   2) em cada submit bem-sucedido       →  marca o último cálculo válido.
+  // Ao iniciar, restauramos tudo. Se o campo distância estiver vazio mas
+  // o cache tiver valor, usamos o cache como fallback e mostramos aviso.
+  // -----------------------------------------------------------------------
+  function saveFormCache() {
+    try {
+      const data = {};
+      for (const el of form.elements) {
+        if (!el.name || el.disabled) continue;
+        if (el.type === 'checkbox') data[el.name] = el.checked;
+        else data[el.name] = el.value;
+      }
+      localStorage.setItem(FORM_CACHE_KEY, JSON.stringify(data));
+    } catch (e) { /* localStorage indisponível — tudo bem */ }
+  }
+
+  function loadFormCache() {
+    try {
+      const raw = localStorage.getItem(FORM_CACHE_KEY);
+      if (!raw) return {};
+      return JSON.parse(raw) || {};
+    } catch (e) { return {}; }
+  }
+
+  function restoreFormCache() {
+    const cache = loadFormCache();
+    if (!cache) return;
+    for (const [name, value] of Object.entries(cache)) {
+      const el = form.elements[name];
+      if (!el) continue;
+      // Só restaura se o campo está vazio no HTML (não sobrescreve o que
+      // o usuário já digitou na sessão atual).
+      if (el.type === 'checkbox') {
+        if (el.checked !== value) el.checked = value;
+      } else {
+        const current = el.value;
+        if (current === '' || current == null) {
+          el.value = value;
+        }
+      }
+    }
+  }
+
+  // Distância: se o campo estiver vazio mas houver cache, usa o cache
+  // e retorna um aviso. Retorna null se nem o cache tem valor.
+  function recoverDistance() {
+    if (distanceInput && distanceInput.value && parseFloat(distanceInput.value) > 0) {
+      return null;
+    }
+    const cache = loadFormCache();
+    const cached = cache['trip.distance_km'];
+    if (cached && parseFloat(cached) > 0) {
+      distanceInput.value = cached;
+      return `Distância recuperada do cache local (${cached} km) — o campo havia sido limpo.`;
+    }
+    return null;
+  }
+
+
   function setDeep(obj, dotted, value) {
     const parts = dotted.split('.');
     let cur = obj;
@@ -236,6 +314,20 @@
     }
 
     if (!payload.trip || !payload.trip.distance_km) {
+      // Tenta recuperar a distância do cache local antes de desistir.
+      const recovered = recoverDistance();
+      if (recovered) {
+        // Re-parseia o form com o campo agora preenchido.
+        const reparsed = cleanNulls(parseForm());
+        if (reparsed.trip && reparsed.trip.distance_km) {
+          payload = reparsed;
+          // Mostra um aviso suave em vez de erro — o usuário vai ver que
+          // pegamos do cache mas o cálculo segue.
+          showSoftWarning(recovered);
+        }
+      }
+    }
+    if (!payload.trip || !payload.trip.distance_km) {
       showError('Informe a distância da viagem (campo obrigatório).');
       submitBtn.disabled = false;
       submitBtn.dataset.loading = 'false';
@@ -251,6 +343,7 @@
     try {
       const engine = await engineReady;
       const data = engine.calculate(payload);
+      saveFormCache();  // marca o último estado válido do form
       renderResult(data);
     } catch (e) {
       // Erros de validação do engine têm .code/.statusCode
@@ -292,6 +385,21 @@
     $('#error-detail').textContent = msg;
   }
 
+  // Aviso não-fatal: mostra uma tarja dentro do result-content sem
+  // bloquear a visualização do resultado. Usado quando a gente recupera
+  // um valor do cache.
+  function showSoftWarning(msg) {
+    let banner = $('#result-warning-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'result-warning-banner';
+      banner.className = 'soft-warning';
+      const result = $('#result-content');
+      result.insertBefore(banner, result.firstChild);
+    }
+    banner.textContent = `ℹ ${msg}`;
+  }
+
   // -----------------------------------------------------------------------
   // Result rendering
   // -----------------------------------------------------------------------
@@ -299,6 +407,10 @@
     resultError.classList.add('hidden');
     resultEmpty.classList.add('hidden');
     resultContent.classList.remove('hidden');
+
+    // Limpa o banner de aviso da renderização anterior.
+    const oldBanner = $('#result-warning-banner');
+    if (oldBanner) oldBanner.remove();
 
     $('#vehicle-label').textContent = data.vehicle_label || '—';
     const fuelBadge = $('#fuel-type-badge');
