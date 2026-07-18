@@ -1,113 +1,96 @@
-# Fuel Consumption API — Front-end
+# Fuel Consumption — Front-end
 
-Interface web estática (HTML + CSS + JavaScript vanilla) que consome a
-[API de cálculo de combustível](../app/). Sem build step, sem
-dependências locais (Chart.js via CDN).
+Interface web estática (HTML + CSS + JavaScript vanilla) que roda
+**100% no navegador**. O motor de cálculo vive em `engine/` (ES
+modules) — não há API externa, não há back-end, não há build step.
+
+> Stack: HTML5 · CSS3 (variáveis, dark/light auto) · JS ES2020 · Chart.js 4.4 via CDN
 
 ## Como rodar local
 
+Qualquer servidor estático serve. O mais simples:
+
 ```bash
-# do diretório raiz do repositório
+cd frontend
 python3 -m http.server 8080
-# Abra: http://localhost:8080/frontend/
+# Abra: http://localhost:8080/
 ```
 
-> Não funciona abrir `index.html` direto pelo `file://` — o `fetch`
-> pra API é bloqueado por CORS do protocolo `file://`.
+> Não funciona abrir `index.html` direto pelo `file://` — o
+> `<script type="module">` é bloqueado por esse protocolo.
 
 ## Como usar
 
-1. No topo da página, configure a **URL base da API** (ex.:
-   `https://seuusuario.pythonanywhere.com`). O indicador verde/vermelho
-   ao lado mostra se a API está respondendo.
-2. Escolha um **preset de veículo** ou marque *Especificações
-   customizadas*.
-3. Preencha os parâmetros da viagem (distância é o único obrigatório).
-4. Clique em **Calcular**.
+1. Escolha um **preset de veículo** (5 carros + 4 motos) ou abra
+   *Especificações customizadas* pra sobrescrever campos.
+2. Preencha os parâmetros da viagem (**distância é o único
+   obrigatório**).
+3. Clique em **Calcular**.
 
-A URL da API é salva no `localStorage`, então não precisa redigitar
-toda vez.
+A página mostra:
 
-## Como hospedar no Netlify
+- **Total de combustível** (L) e **custo em BRL** (se você
+  informar `fuel_price_brl_per_l`)
+- **Consumo médio** em km/L e L/100 km
+- **Energia consumida** (MJ) e **CO₂ emitido** (kg)
+- **Gráfico de fatores** (Chart.js): quanto cada variável
+  contribuiu pro resultado
+- **Breakdown por segmento** de 100 m (inclinação, velocidade,
+  potência trativa, combustível)
+- **Avisos** operacionais (pneu murcho, tanque pequeno, AC no frio…)
 
-O jeito mais fácil é conectar o GitHub ao Netlify — push na `main`
-faz redeploy automático.
+A última entrada válida é salva em `localStorage` (chave
+`fuel:form-cache:v1`). Se o DOM for limpo por algum motivo
+(extensão, autofill, bug de navegador), o app restaura do cache
+e segue com o cálculo.
 
-**Opção 1: via interface do Netlify (sem CLI)**
+## Como hospedar
 
-1. Suba o repo pro GitHub (você já fez isso).
-2. Acesse <https://app.netlify.com/start> e conecte sua conta GitHub.
-3. Selecione o repo `Fuel-Consumption-API`.
-4. Configure:
-   - **Build command**: deixe vazio
-   - **Publish directory**: `frontend`
-5. Clique em **Deploy site**. Em ~30 s, o front-end está no ar
-   numa URL tipo `https://random-name-12345.netlify.app`.
-6. (Opcional) **Site settings → Change site name** pra um domínio
-   customizado tipo `fuel-comb.netlify.app`.
+### Netlify (mais fácil)
 
-**Opção 2: via CLI (pra deploys manuais)**
+O `netlify.toml` na raiz já está configurado (`publish = "frontend"`).
 
-```bash
-npm install -g netlify-cli
-netlify login
-netlify init   # primeira vez, escolhe "create new site"
-netlify deploy --dir=frontend --prod
-```
+1. Conecte o repo no GitHub em <https://app.netlify.com/start>
+2. Build command: (vazio) · Publish directory: `frontend`
+3. Push na `main` → redeploy automático
 
-Aí você também pode usar `netlify deploy --dir=frontend` (sem
-`--prod`) pra fazer deploy de **preview** num URL temporário antes
-de mandar pra produção.
+### Outras opções
 
-**Opção 3: drag-and-drop (mais rápida pra testar)**
-
-1. Acesse <https://app.netlify.com/drop>.
-2. Arraste a pasta `frontend/` direto na página.
-3. Pronto — site no ar em segundos, sem precisar conectar GitHub.
-
-## Configurando a URL da API após o deploy
-
-Após o primeiro deploy, abra o site no ar e:
-
-1. No campo **API** no topo da página, digite a URL do seu back-end
-   (ex.: `https://seuusuario.pythonanywhere.com`).
-2. Aperte **Enter** ou saia do campo — a URL fica salva no
-   `localStorage` do navegador.
-
-**OU**, melhor: habilite o **proxy reverso** no `netlify.toml`
-(descomente o bloco `[[redirects]]` que aponta `/api/*` pro seu
-PythonAnywhere). Aí você usa URL relativa `/api/v1/fuel/...` e:
-
-- CORS vira problema de servidor (mesma origem = sem preflight)
-- A URL do back-end fica escondida do público
-- Não precisa configurar nada no campo "API" — funciona de cara
-
-Depois de descomentar, lembre de trocar `DEFAULT_API` em
-`frontend/app.js` pra string vazia (`const DEFAULT_API = '';`) e
-dar push. O site vai rebuildar sozinho.
-
-## Stack
-
-- HTML5 puro
-- CSS puro com variáveis (suporta dark/light mode automático)
-- JavaScript ES2020, sem build
-- [Chart.js 4.4](https://www.chartjs.org/) via CDN (gráfico de fatores)
+- **GitHub Pages**: settings → Pages → source: `main`, folder: `/frontend`
+- **Vercel / Cloudflare Pages**: importar repo, publish = `frontend`
+- **S3 / nginx / qualquer host estático**: copie o conteúdo de `frontend/`
 
 ## Estrutura
 
 ```
 frontend/
-├── index.html     # página única
-├── styles.css     # tema dark/light responsivo
-├── app.js         # lógica (fetch, parse, render, validação)
-├── _headers       # cabeçalhos de segurança (Netlify)
-├── _redirects     # regras de proxy/redirect (Netlify)
-└── README.md      # este arquivo
+├── index.html           # página única
+├── styles.css           # tema dark/light
+├── app.js               # controller: form, eventos, render
+├── engine/
+│   ├── physics.js       # arrasto, rolamento, subida, potência, vazão
+│   ├── corrections.js   # 13+ fatores multiplicativos
+│   ├── presets.js       # 9 veículos (5 carros + 4 motos)
+│   ├── calculator.js    # orquestração + integração 100m + stop-and-go
+│   └── index.js         # barrel re-exportando a API pública
+├── _headers             # Netlify: headers de segurança
+├── _redirects           # Netlify: regras de redirect
+└── README.md            # este arquivo
 ```
+
+## Stack
+
+- HTML5 puro
+- CSS puro com custom properties (suporta dark/light automático
+  via `prefers-color-scheme`)
+- JavaScript ES2020, sem build
+- [Chart.js 4.4](https://www.chartjs.org/) via CDN
+- ES modules nativos (`<script type="module">`)
 
 ## Limitações conhecidas
 
 - O breakdown por segmento mostra os primeiros 50 (~5 km). Viagens
-  maiores mostram `+N segmentos` no fim.
+  maiores mostram `+N segmentos` no fim da tabela.
 - Sem histórico de cálculos nesta versão.
-- Sem autenticação — a API está aberta a qualquer um que souber a URL.
+- Sem autenticação (a página é pública).
+- Cache do form (`localStorage`) só guarda a última entrada válida.
