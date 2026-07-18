@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
-  <script src="app.js" defer></script>
+  <script type="module" src="app.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -19,10 +19,9 @@
           <p class="brand-sub">Calculadora de consumo para veículos leves</p>
         </div>
       </div>
-      <div class="api-bar">
-        <label for="api-base" class="api-label">API</label>
-        <input id="api-base" type="url" spellcheck="false" placeholder="https://seuusuario.pythonanywhere.com" />
-        <span id="api-status" class="api-status" data-state="unknown" title="Saúde da API">●</span>
+      <div class="local-badge" title="Cálculo 100% local, sem servidor">
+        <span class="local-dot" aria-hidden="true">●</span>
+        <span>100% no navegador · sem API externa</span>
       </div>
     </div>
   </header>
@@ -223,7 +222,7 @@
       <div id="result-empty" class="empty-state">
         <span class="empty-icon" aria-hidden="true">📊</span>
         <h2>Pronto pra calcular</h2>
-        <p>Preencha os parâmetros e clique em <strong>Calcular</strong> pra ver o consumo estimado.</p>
+        <p>Preencha os parâmetros e clique em <strong>Calcular</strong>. O motor de física roda <em>no seu navegador</em> — sem servidor, sem API externa, sem internet depois de carregar.</p>
       </div>
 
       <div id="result-content" class="hidden">
@@ -319,7 +318,7 @@
   <footer class="footer">
     <span>Fuel Consumption API</span>
     <span class="sep">·</span>
-    <a href="https://github.com/0pedrohalmeida0/Fuel-Consumption-API" target="_blank" rel="noopener">ver no GitHub</a>
+    <a href="https://github.com/0pedrohalmeida0/Fuel-Consumption-API" target="_blank" rel="noopener">ver no GitHub</a> · 100% client-side
   </footer>
 </body>
 </html>

@@ -1,19 +1,11 @@
 /* =========================================================================
-   Fuel Consumption API — Front-end logic
+   Fuel Consumption — Front-end logic
+   100% client-side: usa o engine em JS puro (frontend/engine/) — sem
+   API externa, sem CORS, sem servidor Python.
    ========================================================================= */
 
 (() => {
   'use strict';
-
-  // -----------------------------------------------------------------------
-  // Config
-  // -----------------------------------------------------------------------
-  const LS_KEY = 'fuel_api_base';
-  // DEFAULT_API pode ser:
-  //   '' (vazio)       — usa URL relativa; requer o proxy /api/* no Netlify
-  //   URL absoluta     — aponta direto pro back-end (sem proxy)
-  // Se você descomentou o bloco [[redirects]] em netlify.toml, deixa ''.
-  const DEFAULT_API = 'https://seuusuario.pythonanywhere.com';
 
   // -----------------------------------------------------------------------
   // DOM helpers
@@ -21,8 +13,6 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-  const apiBaseInput = $('#api-base');
-  const apiStatus = $('#api-status');
   const form = $('#calc-form');
   const submitBtn = $('#submit-btn');
   const resetBtn = $('#reset-btn');
@@ -39,18 +29,15 @@
   let factorsChart = null;
   let elevCounter = 0;
 
+  // Engine é carregado dinamicamente (ES module) — resolvido em
+  // `engineReady` antes do usuário poder submeter.
+  let engineReady = null;  // Promise<{ calculate, listPresets, getPreset }>
+
   // -----------------------------------------------------------------------
   // Init
   // -----------------------------------------------------------------------
-  function init() {
-    const saved = localStorage.getItem(LS_KEY) || DEFAULT_API;
-    apiBaseInput.value = saved;
-    apiBaseInput.addEventListener('change', () => {
-      localStorage.setItem(LS_KEY, apiBaseInput.value.trim());
-      checkApiHealth();
-    });
-
-    // Sensible defaults for the first paint
+  async function init() {
+    // Sensible defaults
     if (!form.elements['trip.average_speed_kmh'].value) {
       form.elements['trip.average_speed_kmh'].value = 80;
     }
@@ -92,65 +79,28 @@
       elevContainer.innerHTML = '';
     });
 
-    // Try to load presets on startup
-    loadPresets();
-    checkApiHealth();
-  }
-
-  // -----------------------------------------------------------------------
-  // API health & presets
-  // -----------------------------------------------------------------------
-  async function checkApiHealth() {
-    setApiStatus('checking');
-    const base = apiBaseInput.value.trim().replace(/\/+$/, '');
-    if (!base) {
-      setApiStatus('unknown');
-      return;
-    }
+    // Engine + presets em paralelo
     try {
-      const res = await fetch(`${base}/health`, { method: 'GET' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      if (data && data.status === 'ok') {
-        setApiStatus('ok');
-      } else {
-        setApiStatus('error');
-      }
-    } catch (e) {
-      setApiStatus('error');
-    }
-  }
-
-  function setApiStatus(state) {
-    apiStatus.dataset.state = state;
-    const tip = {
-      unknown: 'API não verificada',
-      checking: 'Verificando…',
-      ok: 'API online',
-      error: 'API indisponível',
-    }[state] || state;
-    apiStatus.title = tip;
-  }
-
-  async function loadPresets() {
-    const base = apiBaseInput.value.trim().replace(/\/+$/, '');
-    if (!base) return;
-    try {
-      const res = await fetch(`${base}/api/v1/fuel/presets`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const presets = await res.json();
+      engineReady = loadEngine();
+      const { listPresets } = await engineReady;
+      const presets = listPresets();
       populatePresets(presets);
-    } catch (e) {
-      // silently fail — user can still enter custom specs
-      console.warn('Não foi possível carregar presets:', e);
+      // Sem status indicator: o engine tá sempre disponível localmente
+    } catch (err) {
+      showError(`Erro ao carregar o motor de cálculo: ${err.message}`);
     }
   }
 
-  function populatePresets(presets) {
-    // Save current selection
-    const current = vehiclePresetSel.value;
+  async function loadEngine() {
+    const mod = await import('./engine/index.js');
+    return mod;
+  }
 
-    // Reset, keep the "custom" placeholder
+  // -----------------------------------------------------------------------
+  // Presets
+  // -----------------------------------------------------------------------
+  function populatePresets(presets) {
+    const current = vehiclePresetSel.value;
     vehiclePresetSel.innerHTML = '<option value="">— veículo custom —</option>';
 
     for (const p of presets || []) {
@@ -164,8 +114,6 @@
     }
 
     if (current) vehiclePresetSel.value = current;
-
-    // Default to the first car preset for convenience
     if (!current) {
       const firstCar = (presets || []).find(p => p.preset_id === 'car-compact-popular');
       if (firstCar) vehiclePresetSel.value = 'car-compact-popular';
@@ -205,7 +153,6 @@
       }
     }
     if (points.length < 2) return null;
-    // Must be strictly ascending
     for (let i = 1; i < points.length; i++) {
       if (points[i].distance_km <= points[i - 1].distance_km) {
         throw new Error('Pontos de elevação devem estar em ordem crescente de distância.');
@@ -223,7 +170,6 @@
     for (const [name, value] of fd.entries()) {
       setDeep(obj, name, parseValue(value));
     }
-    // Checkboxes: FormData omits unchecked — we add `false` if absent
     if (!('driver.use_ac' in obj)) {
       setDeep(obj, 'driver.use_ac', false);
     }
@@ -244,7 +190,6 @@
   function parseValue(v) {
     if (v === '' || v === null || v === undefined) return null;
     if (v === 'on') return true;
-    // numeric?
     if (/^-?\d+(\.\d+)?$/.test(v)) return Number(v);
     return v;
   }
@@ -290,7 +235,6 @@
       return;
     }
 
-    // Validation: at least distance
     if (!payload.trip || !payload.trip.distance_km) {
       showError('Informe a distância da viagem (campo obrigatório).');
       submitBtn.disabled = false;
@@ -304,26 +248,14 @@
       return;
     }
 
-    const base = apiBaseInput.value.trim().replace(/\/+$/, '');
     try {
-      const res = await fetch(`${base}/api/v1/fuel/calculate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        let detail = text;
-        try {
-          const j = JSON.parse(text);
-          detail = j.error ? JSON.stringify(j.error, null, 2) : (j.detail || text);
-        } catch (_) { /* keep raw text */ }
-        throw new Error(`HTTP ${res.status}\n${detail}`);
-      }
-      const data = JSON.parse(text);
+      const engine = await engineReady;
+      const data = engine.calculate(payload);
       renderResult(data);
     } catch (e) {
-      showError(e.message);
+      // Erros de validação do engine têm .code/.statusCode
+      const detail = e.code ? `[${e.code}] ${e.message}` : e.message;
+      showError(detail);
     } finally {
       submitBtn.disabled = false;
       submitBtn.dataset.loading = 'false';
@@ -332,7 +264,6 @@
 
   function onReset() {
     form.reset();
-    // Restore defaults
     form.elements['trip.average_speed_kmh'].value = 80;
     form.elements['environment.temperature_c'].value = 20;
     form.elements['environment.altitude_m'].value = 0;
@@ -406,9 +337,8 @@
     const canvas = $('#factors-chart');
     if (!canvas || !window.Chart) return;
 
-    // Group positive/negative around 1.0 visually; sort by impact
     const items = factors
-      .filter(f => f.name !== 'ethanol_blend_co2') // only one of the ethanol factors for clarity
+      .filter(f => f.name !== 'ethanol_blend_co2')
       .map(f => ({ name: prettyName(f.name), factor: f.factor }));
 
     items.sort((a, b) => Math.abs(Math.log(b.factor)) - Math.abs(Math.log(a.factor)));
@@ -506,7 +436,6 @@
   function renderSegments(segments) {
     const tbody = $('#segments-table tbody');
     tbody.innerHTML = '';
-    // Show only the first 50 to keep DOM light
     const show = segments.slice(0, 50);
     for (const s of show) {
       const tr = document.createElement('tr');
